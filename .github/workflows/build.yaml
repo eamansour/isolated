@@ -7,6 +7,11 @@ name: Main build
 
 on:
   workflow_dispatch:
+    inputs:
+      artifact-run-id:
+        description: 'Run ID of the galasa Main Build Orchestrator to download artifacts from'
+        required: false
+        type: string
   push:
     branches: [main]
 
@@ -33,39 +38,35 @@ jobs:
     secrets:
       WRITE_GITHUB_PACKAGES_TOKEN: ${{ secrets.WRITE_GITHUB_PACKAGES_TOKEN }}
 
-  find-last-successful-build:
-    name: Find last successful Galasa build to download galasa-docs-site from
+  resolve-artifact-run-id:
+    name: Resolve artifact run ID
     runs-on: ubuntu-latest
 
-    outputs: 
-      workflow_id: ${{ steps.find-last-successful-build.outputs.workflow_id }}
+    outputs:
+      artifact-run-id: ${{ steps.resolve.outputs.artifact-run-id }}
 
     steps:
-      - name: Find last successful Galasa build
-        id: find-last-successful-build
+      - name: Resolve artifact run ID from input or repository variable
+        id: resolve
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: https://github.com/galasa-dev/galasa
+          GH_TOKEN: ${{ secrets.GALASA_TEAM_GITHUB_TOKEN }}
+          INPUT_ARTIFACT_RUN_ID: ${{ inputs.artifact-run-id }}
         run: |
-          WORKFLOW_NAME="Main Build Orchestrator"
-          if [ "${{ env.BRANCH }}" = "release" ] || [ "${{ env.BRANCH }}" = "prerelease" ]; then
-            WORKFLOW_NAME="Release Build Orchestrator"
+          ARTIFACT_RUN_ID="$INPUT_ARTIFACT_RUN_ID"
+          if [ -z "$ARTIFACT_RUN_ID" ]; then
+            ARTIFACT_RUN_ID="$(gh variable get LAST_SUCCESSFUL_MAIN_BUILD_RUN_ID --repo galasa-dev/galasa 2>/dev/null || true)"
           fi
-
-          BRANCH=${{ env.BRANCH }}
-
-          echo "workflow_id=$(gh run list \
-            --repo ${{ env.REPO }} \
-            --workflow "$WORKFLOW_NAME" \
-            --branch $BRANCH \
-            --status success \
-            --limit 1 \
-            --json databaseId | jq '.[0].databaseId')" >> $GITHUB_OUTPUT
+          if [ -z "$ARTIFACT_RUN_ID" ]; then
+            echo "Error: failed to resolve artifact-run-id - provide it as a workflow input or set repository secret GALASA_TEAM_GITHUB_TOKEN to a valid GitHub Personal Access Token" >&2
+            exit 1
+          fi
+          echo "Resolved artifact run ID: $ARTIFACT_RUN_ID"
+          echo "artifact-run-id=$ARTIFACT_RUN_ID" >> $GITHUB_OUTPUT
 
   build-isolated:
     name: Build Isolated
     runs-on: ubuntu-latest
-    needs: [check-required-secrets-configured, find-last-successful-build]
+    needs: [check-required-secrets-configured, resolve-artifact-run-id]
 
     steps:
       - name: Checkout Galasa
@@ -209,7 +210,7 @@ jobs:
           repository: galasa-dev/galasa
           path: ${{ github.workspace }}/isolated/full/target/isolated/galasa-docs-site
           github-token: ${{ github.token }}
-          run-id: ${{ needs.find-last-successful-build.outputs.workflow_id }}
+          run-id: ${{ needs.resolve-artifact-run-id.outputs.artifact-run-id }}
 
       - name: Extract metadata for galasa-isolated image
         id: metadata-galasa-isolated
@@ -319,7 +320,7 @@ jobs:
   build-mvp:
     name: Build MVP
     runs-on: ubuntu-latest
-    needs: [check-required-secrets-configured, find-last-successful-build]
+    needs: [check-required-secrets-configured, resolve-artifact-run-id]
 
     steps:
       - name: Checkout Galasa
@@ -463,7 +464,7 @@ jobs:
           repository: galasa-dev/galasa
           path: ${{ github.workspace }}/isolated/mvp/target/isolated/galasa-docs-site
           github-token: ${{ github.token }}
-          run-id: ${{ needs.find-last-successful-build.outputs.workflow_id }}
+          run-id: ${{ needs.resolve-artifact-run-id.outputs.artifact-run-id }}
 
       - name: Extract metadata for galasa-mvp image
         id: metadata-galasa-mvp

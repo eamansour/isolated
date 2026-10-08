@@ -18,23 +18,18 @@ jobs:
     name: Find last successful Galasa build to download galasa-docs-site from
     runs-on: ubuntu-latest
 
-    outputs: 
+    outputs:
       workflow_id: ${{ steps.find-last-successful-build.outputs.workflow_id }}
 
     steps:
       - name: Find last successful Galasa build
         id: find-last-successful-build
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: https://github.com/galasa-dev/galasa
+          GH_TOKEN: ${{ secrets.GALASA_TEAM_GITHUB_TOKEN }}
         run: |
-          echo "workflow_id=$(gh run list \
-            --repo ${{ env.REPO }} \
-            --workflow 'Main Build Orchestrator' \
-            --branch main \
-            --status success \
-            --limit 1 \
-            --json databaseId | jq '.[0].databaseId')" >> $GITHUB_OUTPUT
+          WORKFLOW_ID="$(gh variable get LAST_SUCCESSFUL_MAIN_BUILD_RUN_ID --repo galasa-dev/galasa)"
+          echo "Resolved artifact run ID: $WORKFLOW_ID"
+          echo "workflow_id=$WORKFLOW_ID" >> $GITHUB_OUTPUT
 
   build-isolated:
     name: Build Isolated
