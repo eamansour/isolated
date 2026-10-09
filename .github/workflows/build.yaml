@@ -64,7 +64,7 @@ jobs:
 
   build-isolated:
     name: Build Isolated
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [check-required-secrets-configured, find-last-successful-build]
 
     steps:
@@ -318,7 +318,7 @@ jobs:
 
   build-mvp:
     name: Build MVP
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [check-required-secrets-configured, find-last-successful-build]
 
     steps:
